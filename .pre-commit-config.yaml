@@ -1,0 +1,13 @@
+repos:
+- repo: local
+  hooks:
+  - id: black
+    name: black
+    language: system
+    files: \.py$
+    entry: black
+  - id: ruff
+    name: ruff
+    language: system
+    files: \.py$
+    entry: ruff

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "miniwdl-omics-submit"
+description = "Command-line interface for submitting WDL workflow runs to Amazon Omics"
+dynamic = ["version"]
+readme = "./README.md"
+dependencies = [
+  "miniwdl>=1.9.1,<2",
+]
+requires-python = "~=3.8"
+urls = { repository = "https://github.com/miniwdl-ext/miniwdl-omics-submit.git" }
+classifiers = ["License :: OSI Approved :: MIT License"]
+
+[project.optional-dependencies]
+# pip install -e .[dev]
+dev = ["pre-commit", "black", "ruff"]
+
+[tool.setuptools_scm]
+write_to = "miniwdl_omics_submit/_version.py"

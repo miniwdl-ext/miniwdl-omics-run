@@ -26,7 +26,7 @@ def main(argv=sys.argv):
         logging.basicConfig(level=logging.DEBUG)
     with ExitStack() as cleanup:
         cleanup.enter_context(configure_logger())
-        logger = logging.getLogger("miniwdl-omics-submit")
+        logger = logging.getLogger("miniwdl-omics-run")
 
         # load WDL document
         wdl_doc = WDL.load(
@@ -82,7 +82,7 @@ def main(argv=sys.argv):
 
 
 def arg_parser():
-    parser = argparse.ArgumentParser("miniwdl-omics-submit")
+    parser = argparse.ArgumentParser("miniwdl-omics-run")
     parser.add_argument(
         "--version",
         action=VersionAction,
@@ -160,7 +160,7 @@ class VersionAction(argparse.Action):
         super().__init__(option_strings, dest, nargs=0, **kwargs)
 
     def __call__(self, parser, namespace, values, option_string=None):
-        print(f"miniwdl-omics-submit v{__version__}")
+        print(f"miniwdl-omics-run v{__version__}")
         subprocess.call(["miniwdl", "--version"])
         parser.exit()
 

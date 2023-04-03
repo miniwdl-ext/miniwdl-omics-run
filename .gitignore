@@ -128,4 +128,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-miniwdl_omics_submit/_version.py
+miniwdl_omics_run/_version.py

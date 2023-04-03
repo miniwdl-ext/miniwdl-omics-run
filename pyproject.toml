@@ -2,6 +2,7 @@
 requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
+
 [project]
 name = "miniwdl-omics-run"
 description = "Command-line interface for running WDL workflows on Amazon Omics"
@@ -15,21 +16,31 @@ requires-python = "~=3.8"
 urls = { repository = "https://github.com/miniwdl-ext/miniwdl-omics-run.git" }
 classifiers = ["License :: OSI Approved :: MIT License"]
 
+
+[project.scripts]
+miniwdl-omics-run = "miniwdl_omics_run:main"
+miniwdl_omics_run = "miniwdl_omics_run:main"
+
+
 [project.optional-dependencies]
-# pip install -e .[dev]
+# pip install --upgrade -e .[dev]
 dev = [
-  "setuptools>=61.0.0",
+  "setuptools",
+  "build",
+  "twine",
   "pre-commit",
   "black",
   "ruff",
-  "twine"
 ]
+
 
 [tool.setuptools_scm]
 write_to = "miniwdl_omics_run/_version.py"
 
+
 [tool.setuptools.dynamic]
 version = {attr = "miniwdl_omics_run._version.__version__"}
+
 
 [tool.ruff]
 select = ["E", "F", "I"]

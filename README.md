@@ -45,11 +45,11 @@ aws iam attach-role-policy --role-name poweromics \
     --policy-arn arn:aws:iam::aws:policy/PowerUserAccess
 ```
 
-**WARNING:** PowerUserAccess, suggested here for brevity, is far more powerful than usually needed. See [Omics docs on service roles](https://docs.aws.amazon.com/omics/latest/dev/permissions-service.html) for the least privileges necessary, especially if you plan to use WDL and/or Docker images from third parties.
+**WARNING:** PowerUserAccess, suggested here only for brevity, is far more powerful than usually needed. See [Omics docs on service roles](https://docs.aws.amazon.com/omics/latest/dev/permissions-service.html) for the least privileges necessary, especially if you plan to use third-party WDL and/or Docker images.
 
 ### ECR repository
 
-Create an ECR repository suitable for Omics workflow runs to pull Docker images from.
+Create an ECR repository suitable for Omics to pull Docker images from.
 
 ```
 aws ecr create-repository --repository-name omics
@@ -89,7 +89,7 @@ miniwdl-omics-run \
     --output-uri "s3://${AWS_ACCOUNT_ID}-${AWS_DEFAULT_REGION}-omics/test/out" \
     https://raw.githubusercontent.com/miniwdl-ext/miniwdl-omics-run/main/test/TestFlow.wdl \
     input_txt_file="s3://${AWS_ACCOUNT_ID}-${AWS_DEFAULT_REGION}-omics/test/test.txt" \
-    docker="${ECR_ENDPT}/omics:ubuntu-22.04"
+    docker="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/omics:ubuntu-22.04"
 ```
 
 This zips up the specified WDL, registers it as an Omics workflow, validates the given inputs, and starts the workflow run.
@@ -100,8 +100,8 @@ The command-line interface accepts WDL inputs using the `input_key=value` syntax
 
 ## Advice
 
-- All Docker images must be pulled from your account ECR.
-  - This often means editing any WDL files that hard-code references to public registries.
+- All Docker images must reside in your account ECR.
+  - This often means editing any WDL tasks that hard-code references to public registries in their `runtime.docker`.
   - Each ECR repository must have the Omics-specific repository policy set as shown above.
   - We therefore tend to use a single ECR repository for multiple Docker images, disambiguating them using lengthier tags.
   - If you prefer to use per-image repositories, just remember to set the repository policy on each one.

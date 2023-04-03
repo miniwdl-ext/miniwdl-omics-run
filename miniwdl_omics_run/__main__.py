@@ -1,5 +1,4 @@
 import argparse
-import hashlib
 import json
 import logging
 import os
@@ -10,6 +9,7 @@ import time
 from contextlib import ExitStack
 
 import boto3
+import botocore.config
 import WDL
 import WDL.CLI
 from WDL._util import configure_logger
@@ -22,8 +22,7 @@ def main(argv=sys.argv):
     args = arg_parser().parse_args(argv[1:])
 
     # set up logger
-    if args.debug:
-        logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=(logging.DEBUG if args.debug else logging.INFO))
     with ExitStack() as cleanup:
         cleanup.enter_context(configure_logger())
         logger = logging.getLogger("miniwdl-omics-run")
@@ -34,8 +33,9 @@ def main(argv=sys.argv):
             args.path or [],
             read_source=WDL.CLI.make_read_source(False),
         )
-
-        # TODO: throw error if doc has multiple tasks and no workflow
+        if not wdl_doc.workflow and len(wdl_doc.tasks) > 1:
+            logger.error("main WDL file must have a workflow or a single task")
+            sys.exit(1)
 
         # parse & validate the inputs
         try:
@@ -48,19 +48,25 @@ def main(argv=sys.argv):
                 downloadable=check_s3_uri_input,
             )
         except WDL.Error.InputError as exn:
-            print("\n" + exn.args[0], file=sys.stderr)
+            logger.error(exn.args[0])
             sys.exit(1)
         input_dict = WDL.values_to_json(input_env)
+        logger.debug(
+            f"WDL={os.path.basename(wdl_doc.pos.abspath)}"
+            f"exe={wdl_exe.name} digest={wdl_exe.digest}"
+        )
+        logger.debug("run inputs = " + json.dumps(input_dict))
 
         # TODO: scan all task runtime.docker and complain if they aren't on ECR
 
         # get/create Omics workflow
-        omics = boto3.client("omics")  # TODO: set retry policy
+        omics = boto3.client(
+            "omics", config=botocore.config.Config(retries={"mode": "standard"})
+        )
         workflow_id = ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe)
         await_omics_workflow(logger, omics, workflow_id)
 
         # start run
-        logger.debug("run inputs: " + json.dumps(input_dict))
         res = omics.start_run(
             outputUri=args.output_uri,
             parameters=input_dict,
@@ -183,9 +189,16 @@ def check_s3_uri_input(path, _is_directory):
 
 
 def ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe):
-    wdl_zip, wdl_zip_sha256 = zip_wdl(logger, cleanup, wdl_doc)
-    omics_workflow_name = wdl_exe.name[:111] + "." + wdl_zip_sha256[:16]
+    """
+    Get an Omics workflow id suitable for running the given WDL -- reusing an existing
+    one if found, otherwise creating it.
+    """
 
+    # Embed a content digest of the WDL source code into the workflow name. We assume
+    # 16 characters of the digest is practically sufficient.
+    omics_workflow_name = wdl_exe.name[:111] + "." + wdl_exe.digest[:16]
+
+    # Look for an existing workflow with this name
     existing_count = 0
     existing_id = None
     for page in omics.get_paginator("list_workflows").paginate(
@@ -210,36 +223,29 @@ def ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe):
             )
         return existing_id
 
+    # Otherwise, create one
     return create_omics_workflow(
-        logger, omics, omics_workflow_name, wdl_doc, wdl_exe, wdl_zip
+        logger, cleanup, omics, omics_workflow_name, wdl_doc, wdl_exe
     )
 
 
-def zip_wdl(logger, cleanup, wdl_doc):
-    logger = logger.getChild("zip")
-    tmp_zip = cleanup.enter_context(
-        tempfile.NamedTemporaryFile(
-            prefix=os.path.basename(wdl_doc.pos.abspath) + ".", suffix=".zip"
-        )
-    )
-    logger.debug(f"zipping {wdl_doc.pos.uri} to {tmp_zip.name}")
-    WDL.Zip.build(wdl_doc, tmp_zip.name, logger)
-    sha256 = hashlib.sha256()
-    with open(tmp_zip.name, "rb") as infile:
-        zip_data = infile.read()
-    sha256.update(zip_data)
-    zip_digest = sha256.hexdigest()
-    logger.debug(f"bytes={len(zip_data)} SHA-256={zip_digest}")
-    return zip_data, zip_digest
+def create_omics_workflow(logger, cleanup, omics, workflow_name, wdl_doc, wdl_exe):
+    """
+    Create a new Omics workflow for this WDL
+    """
 
+    # zip up the source code
+    wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
 
-def create_omics_workflow(logger, omics, workflow_name, wdl_doc, wdl_exe, wdl_zip):
+    # formulate the Omics parameter template based on the WDL inputs
     parameter_template = {}
     for b in wdl_exe.available_inputs:
         parameter_template[b.name] = {
             "description": b.name,  # TODO: get from parameter_meta
             "optional": b.name not in wdl_exe.required_inputs,
         }
+
+    # create workflow
     logger.debug(
         f"creating Omics workflow {workflow_name} with parameter template: "
         + json.dumps(parameter_template)
@@ -257,8 +263,27 @@ def create_omics_workflow(logger, omics, workflow_name, wdl_doc, wdl_exe, wdl_zi
     return workflow_id
 
 
+def zip_wdl(logger, cleanup, wdl_doc):
+    """
+    Zip up the WDL source code (along with any other WDL files it imports)
+    """
+    logger = logger.getChild("zip")
+    tmp_zip = cleanup.enter_context(
+        tempfile.NamedTemporaryFile(
+            prefix=os.path.basename(wdl_doc.pos.abspath) + ".", suffix=".zip"
+        )
+    )
+    WDL.Zip.build(wdl_doc, tmp_zip.name, logger)
+    with open(tmp_zip.name, "rb") as infile:
+        zip_data = infile.read()
+    logger.debug(f"zipped {wdl_doc.pos.uri} to {tmp_zip.name} ({len(zip_data)} bytes)")
+    return zip_data
+
+
 def await_omics_workflow(logger, omics, workflow_id):
-    # wait for workflow to finish CREATING
+    """
+    Wait for Omics workflow to finish CREATING
+    """
     while True:
         workflow_details = omics.get_workflow(export=[], id=workflow_id, type="PRIVATE")
         status = workflow_details["status"]

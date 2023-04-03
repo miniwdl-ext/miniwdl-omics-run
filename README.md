@@ -45,7 +45,7 @@ aws iam attach-role-policy --role-name poweromics \
     --policy-arn arn:aws:iam::aws:policy/PowerUserAccess
 ```
 
-**WARNING:** PowerUserAccess, suggested here only for brevity, is far more powerful than usually needed. See [Omics docs on service roles](https://docs.aws.amazon.com/omics/latest/dev/permissions-service.html) for the least privileges necessary, especially if you plan to use third-party WDL and/or Docker images.
+**WARNING:** PowerUserAccess, suggested here only for brevity, is far more powerful than needed. See [Omics docs on service roles](https://docs.aws.amazon.com/omics/latest/dev/permissions-service.html) for the least privileges necessary, especially if you plan to use third-party WDL and/or Docker images.
 
 ### ECR repository
 
@@ -92,16 +92,17 @@ miniwdl-omics-run \
     docker="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/omics:ubuntu-22.04"
 ```
 
-This zips up the specified WDL, registers it as an Omics workflow, validates the given inputs, and starts the workflow run.
+This zips up [the specified WDL](https://raw.githubusercontent.com/miniwdl-ext/miniwdl-omics-run/main/test/TestFlow.wdl), registers it as an Omics workflow, validates the given inputs, and starts the workflow run.
 
-The WDL source code may be set to a local filename or a public HTTP(S) URL. The tool automatically bundles any WDL files imported by the main one. On subsequent invocations, it'll reuse the previously-registered workflow if the WDL source code hasn't changed.
+The WDL source code may be set to a local filename or a public HTTP(S) URL. The tool automatically bundles any WDL files imported by the main one. On subsequent invocations, it'll reuse the previously-registered workflow if the source code hasn't changed.
 
 The command-line interface accepts WDL inputs using the `input_key=value` syntax exactly like [`miniwdl run`](https://miniwdl.readthedocs.io/en/latest/runner_cli.html), including the option of a JSON file with `--input FILE.json`. Each input File must be set to an existing S3 URI accessible by the service role.
 
 ## Advice
 
-- All Docker images must reside in your account ECR.
-  - This often means editing any WDL tasks that hard-code references to public registries in their `runtime.docker`.
+- Omics can pull Docker images *only* from your account ECR.
+  - This often means pulling, re-tagging, and pushing images as illustrated above with `ubuntu:22.04`.
+  - And editing any WDL tasks that hard-code public registries in their `runtime.docker`.
   - Each ECR repository must have the Omics-specific repository policy set as shown above.
   - We therefore tend to use a single ECR repository for multiple Docker images, disambiguating them using lengthier tags.
   - If you prefer to use per-image repositories, just remember to set the repository policy on each one.

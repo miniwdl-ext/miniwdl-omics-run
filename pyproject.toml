@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "setuptools-scm", "wheel"]
+requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -17,10 +17,19 @@ classifiers = ["License :: OSI Approved :: MIT License"]
 
 [project.optional-dependencies]
 # pip install -e .[dev]
-dev = ["pre-commit", "black", "ruff"]
+dev = [
+  "setuptools>=61.0.0",
+  "pre-commit",
+  "black",
+  "ruff",
+  "twine"
+]
 
 [tool.setuptools_scm]
 write_to = "miniwdl_omics_run/_version.py"
+
+[tool.setuptools.dynamic]
+version = {attr = "miniwdl_omics_run._version.__version__"}
 
 [tool.ruff]
 select = ["E", "F", "I"]

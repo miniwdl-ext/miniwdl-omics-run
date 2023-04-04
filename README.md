@@ -1,6 +1,6 @@
 # miniwdl-omics-run
 
-This command-line tool makes the [Amazon Omics workflow service](https://docs.aws.amazon.com/omics/latest/dev/workflows.html) easier to use with local [WDL](https://openwdl.org/) source code files. It uses [miniwdl](https://github.com/chanzuckerberg/miniwdl) locally to register WDL workflows with the service, validate command-line inputs, and start a run.
+This command-line tool makes it easier to launch [WDL](https://openwdl.org/) workflow runs on [Amazon Omics](https://docs.aws.amazon.com/omics/latest/dev/workflows.html). It uses [miniwdl](https://github.com/chanzuckerberg/miniwdl) locally to register WDL workflows with the service, validate command-line inputs, and start a run.
 
 ```
 pip3 install miniwdl-omics-run
@@ -100,7 +100,7 @@ The command-line interface accepts WDL inputs using the `input_key=value` syntax
 
 ## Advice
 
-- Omics can pull Docker images *only* from your account ECR.
+- Omics can use Docker images *only* from your ECR in the same account & region.
   - This often means pulling, re-tagging, and pushing images as illustrated above with `ubuntu:22.04`.
   - And editing any WDL tasks that hard-code public registries in their `runtime.docker`.
   - Each ECR repository must have the Omics-specific repository policy set as shown above.

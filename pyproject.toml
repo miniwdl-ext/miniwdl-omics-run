@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "miniwdl-omics-run"
-description = "Command-line interface for running WDL workflows on Amazon Omics"
+description = "WDL launcher for Amazon Omics"
 dynamic = ["version"]
 readme = "./README.md"
 dependencies = [

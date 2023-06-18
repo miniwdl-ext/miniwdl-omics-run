@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from contextlib import ExitStack
 
 import boto3
@@ -73,7 +74,9 @@ def main(argv=sys.argv):
             roleArn=args.role_arn,
             workflowId=workflow_id,
             workflowType="PRIVATE",
-            # TODO: name, priority, runGroupId, storageCapacity (from args)
+            logLevel="ALL",
+            requestId=str(uuid.uuid4()),
+            **start_run_options(args),
         )
 
     run_id = res["id"]
@@ -154,11 +157,33 @@ def arg_parser():
         "--output-uri",
         metavar="OUTPUT_S3_URI",
         type=check_s3_uri_arg,
-        help="Base S3 URI for workflow outputs",
+        help="S3 URI prefix for workflow outputs",
         required=True,
+    )
+    group.add_argument("--name", type=str, help="Name", default=None)
+    group.add_argument("--priority", type=int, help="Priority (integer)", default=None)
+    group.add_argument("--run-group-id", type=str, help="Run group ID", default=None)
+    group.add_argument(
+        "--storage-capacity",
+        type=int,
+        help="Storage capacity in gigabytes",
+        default=None,
     )
 
     return parser
+
+
+def start_run_options(args):
+    ans = {}
+    if args.name is not None:
+        ans["name"] = args.name
+    if args.priority is not None:
+        ans["priority"] = args.priority
+    if args.run_group_id is not None:
+        ans["runGroupId"] = args.run_group_id
+    if args.storage_capacity is not None:
+        ans["storageCapacity"] = args.storage_capacity
+    return ans
 
 
 class VersionAction(argparse.Action):

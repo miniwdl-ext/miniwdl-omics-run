@@ -34,29 +34,46 @@ def main(argv=sys.argv):
             args.path or [],
             read_source=WDL.CLI.make_read_source(False),
         )
-        if not wdl_doc.workflow and len(wdl_doc.tasks) > 1:
+        if not wdl_doc.workflow and len(wdl_doc.tasks) != 1:
             logger.error("main WDL file must have a workflow or a single task")
             sys.exit(1)
 
         # parse & validate the inputs
-        try:
-            wdl_exe, input_env, _ = WDL.CLI.runner_input(
-                wdl_doc,
-                args.inputs,
-                args.input_file,
-                args.empty,
-                args.none,
-                downloadable=check_s3_uri_input,
-            )
-        except WDL.Error.InputError as exn:
-            logger.error(exn.args[0])
-            sys.exit(1)
-        input_dict = WDL.values_to_json(input_env)
+        if not args.build:
+            if not args.output_uri:
+                logger.error("--output-uri URI is required to start run")
+                sys.exit(1)
+            try:
+                wdl_exe, input_env, _ = WDL.CLI.runner_input(
+                    wdl_doc,
+                    args.inputs,
+                    args.input_file,
+                    args.empty,
+                    args.none,
+                    downloadable=check_s3_uri_input,
+                )
+            except WDL.Error.InputError as exn:
+                logger.error(exn.args[0])
+                sys.exit(1)
+            input_dict = WDL.values_to_json(input_env)
+            logger.debug("run inputs = " + json.dumps(input_dict))
+        else:  # args.build
+            if (
+                args.inputs
+                or args.input_file
+                or args.empty
+                or args.none
+                or args.output_uri
+            ):
+                logger.error(
+                    "workflow input/output arguments are not applicable with --build"
+                )
+                sys.exit(1)
+            wdl_exe = wdl_doc.workflow or wdl_doc.tasks[0]
         logger.debug(
             f"WDL={os.path.basename(wdl_doc.pos.abspath)}"
-            f"exe={wdl_exe.name} digest={wdl_exe.digest}"
+            f" exe={wdl_exe.name} digest={wdl_exe.digest}"
         )
-        logger.debug("run inputs = " + json.dumps(input_dict))
 
         # TODO: scan all task runtime.docker and complain if they aren't on ECR
 
@@ -66,6 +83,10 @@ def main(argv=sys.argv):
         )
         workflow_id = ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe)
         await_omics_workflow(logger, omics, workflow_id)
+
+        if args.build:
+            print(json.dumps({"workflowId": workflow_id}, indent=2))
+            sys.exit(0)
 
         # start run
         res = omics.start_run(
@@ -113,6 +134,9 @@ def arg_parser():
         action="append",
         help="local directory to search for imports (can supply multiple times)",
     )
+    group.add_argument(
+        "-b", "--build", action="store_true", help="build workflow only (do not run)"
+    )
 
     group = parser.add_argument_group("run inputs")
     group.add_argument(
@@ -158,7 +182,6 @@ def arg_parser():
         metavar="OUTPUT_S3_URI",
         type=check_s3_uri_arg,
         help="S3 URI prefix for workflow outputs",
-        required=True,
     )
     group.add_argument("--name", type=str, help="Name", default=None)
     group.add_argument("--priority", type=int, help="Priority (integer)", default=None)

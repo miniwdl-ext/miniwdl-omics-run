@@ -50,7 +50,7 @@ def main(argv=sys.argv):
                     args.input_file,
                     args.empty,
                     args.none,
-                    downloadable=check_s3_uri_input,
+                    downloadable=check_uri_input,
                 )
             except WDL.Error.InputError as exn:
                 logger.error(exn.args[0])

@@ -85,11 +85,11 @@ docker push "${ECR_ENDPT}/omics:ubuntu-22.04"
 
 ```
 pip3 install miniwdl-omics-run
+wget https://raw.githubusercontent.com/miniwdl-ext/miniwdl-omics-run/main/test/TestFlow.wdl
 
-miniwdl-omics-run \
+miniwdl-omics-run TestFlow.wdl \
     --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/poweromics \
     --output-uri "s3://${AWS_ACCOUNT_ID}-${AWS_DEFAULT_REGION}-omics/test/out" \
-    https://raw.githubusercontent.com/miniwdl-ext/miniwdl-omics-run/main/test/TestFlow.wdl \
     input_txt_file="s3://${AWS_ACCOUNT_ID}-${AWS_DEFAULT_REGION}-omics/test/test.txt" \
     docker="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/omics:ubuntu-22.04"
 ```

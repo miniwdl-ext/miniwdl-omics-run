@@ -1,6 +1,6 @@
 # miniwdl-omics-run
 
-This command-line tool makes it easier to launch [WDL](https://openwdl.org/) runs on the [AWS HealthOmics]([https://docs.aws.amazon.com/omics/latest/dev/workflows.html](https://aws.amazon.com/healthomics/) workflow service. It uses [miniwdl](https://github.com/chanzuckerberg/miniwdl) locally to register WDL workflows, validate command-line inputs, and start a run.
+This command-line tool makes it easier to launch [WDL](https://openwdl.org/) runs on the [AWS HealthOmics](https://docs.aws.amazon.com/omics/latest/dev/workflows.html) workflow service. It uses [miniwdl](https://github.com/chanzuckerberg/miniwdl) locally to register WDL workflows, validate command-line inputs, and start a run.
 
 ```
 pip3 install miniwdl-omics-run

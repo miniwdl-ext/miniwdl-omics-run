@@ -50,7 +50,7 @@ def main(argv=sys.argv):
                     args.input_file,
                     args.empty,
                     args.none,
-                    downloadable=check_s3_uri_input,
+                    downloadable=check_uri_input,
                 )
             except WDL.Error.InputError as exn:
                 logger.error(exn.args[0])
@@ -220,8 +220,11 @@ class VersionAction(argparse.Action):
 
 
 def is_s3_uri(x):
-    # TODO: allow omics://
     return isinstance(x, str) and x.startswith("s3://")
+
+
+def is_omics_uri(x):
+    return isinstance(x, str) and x.startswith("omics://")
 
 
 def check_s3_uri_arg(x):
@@ -230,9 +233,9 @@ def check_s3_uri_arg(x):
     return x
 
 
-def check_s3_uri_input(path, _is_directory):
-    if not is_s3_uri(path):
-        raise WDL.Error.InputError("File/Directory input is not a s3:// URI: " + path)
+def check_uri_input(path, _is_directory):
+    if not (is_s3_uri(path) or is_omics_uri(path)):
+        raise WDL.Error.InputError("File/Directory input is not a s3:// nor an omics:// URI: " + path)
     return path
 
 

@@ -1,6 +1,6 @@
 # miniwdl-omics-run
 
-This command-line tool makes it easier to launch [WDL](https://openwdl.org/) workflow runs on [Amazon Omics](https://docs.aws.amazon.com/omics/latest/dev/workflows.html). It uses [miniwdl](https://github.com/chanzuckerberg/miniwdl) locally to register WDL workflows with the service, validate command-line inputs, and start a run.
+This command-line tool makes it easier to launch [WDL](https://openwdl.org/) runs on the [AWS HealthOmics]([https://docs.aws.amazon.com/omics/latest/dev/workflows.html](https://aws.amazon.com/healthomics/) workflow service. It uses [miniwdl](https://github.com/chanzuckerberg/miniwdl) locally to register WDL workflows, validate command-line inputs, and start a run.
 
 ```
 pip3 install miniwdl-omics-run
@@ -13,7 +13,9 @@ miniwdl-omics-run \
 
 ## Quick start
 
-Prerequisites: up-to-date [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed locally, and [configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) with full [AdministratorAccess](https://us-east-1.console.aws.amazon.com/iam/home#/policies/arn:aws:iam::aws:policy/AdministratorAccess$jsonEditor) to your AWS account.
+Prerequisites: Unix command line with Python & pip; up-to-date [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed locally, and [configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) with full access to your AWS account.
+
+First a few one-time account setup steps (S3 bucket, IAM service role, ECR repo), then launching a test workflow.
 
 ### S3 bucket
 

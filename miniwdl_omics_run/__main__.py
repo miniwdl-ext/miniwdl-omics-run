@@ -43,6 +43,14 @@ def main(argv=sys.argv):
             if not args.output_uri:
                 logger.error("--output-uri URI is required to start run")
                 sys.exit(1)
+            if not (args.role or args.role_arn):
+                logger.error("one of --role or --role-arn is required to start run")
+                sys.exit(1)
+            if args.role:
+                if args.role_arn:
+                    logger.error("supply only one of --role or --role-arn")
+                    sys.exit(1)
+                args.role_arn = resolve_iam_role_arn(logger, args.role)
             try:
                 wdl_exe, input_env, _ = WDL.CLI.runner_input(
                     wdl_doc,
@@ -81,6 +89,11 @@ def main(argv=sys.argv):
         omics = boto3.client(
             "omics", config=botocore.config.Config(retries={"mode": "standard"})
         )
+        if args.run_group:
+            if args.run_group_id:
+                logger.error("supply only one of --run-group or --run-group-id")
+                sys.exit(1)
+            args.run_group_id = resolve_run_group_id(logger, omics, args.run_group)
         workflow_id = ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe)
         await_omics_workflow(logger, omics, workflow_id)
 
@@ -170,12 +183,12 @@ def arg_parser():
     )
 
     group = parser.add_argument_group("Omics run configuration")
+    group.add_argument("--role", type=str, help="Name of IAM role")
     group.add_argument(
         "--role-arn",
         metavar="ARN",
         type=str,
-        help="ARN of IAM role",
-        required=True,
+        help="ARN of IAM role (saves API call to resolve --role)",
     )
     group.add_argument(
         "--output-uri",
@@ -183,9 +196,15 @@ def arg_parser():
         type=check_s3_uri_arg,
         help="S3 URI prefix for workflow outputs",
     )
-    group.add_argument("--name", type=str, help="Name", default=None)
+    group.add_argument("--name", type=str, help="Run name", default=None)
     group.add_argument("--priority", type=int, help="Priority (integer)", default=None)
-    group.add_argument("--run-group-id", type=str, help="Run group ID", default=None)
+    group.add_argument("--run-group", type=str, help="Run group name", default=None)
+    group.add_argument(
+        "--run-group-id",
+        type=str,
+        help="Run group ID (saves API call to resolve --run-group)",
+        default=None,
+    )
     group.add_argument(
         "--storage-capacity",
         type=int,
@@ -349,6 +368,32 @@ def await_omics_workflow(logger, omics, workflow_id):
             break
         time.sleep(1)
     logger.debug("workflow details: " + str(workflow_details))
+
+
+def resolve_iam_role_arn(logger, role_name):
+    try:
+        arn = boto3.client("iam").get_role(RoleName=role_name)["Role"]["Arn"]
+        logger.info(f"using IAM role {arn}")
+    except Exception as exn:
+        logger.exception(exn)
+        logger.error(f"unable to resolve IAM role named '{role_name}'")
+        sys.exit(1)
+    return arn
+
+
+def resolve_run_group_id(logger, omics, run_group_name):
+    groups = omics.list_run_groups(name=run_group_name, maxResults=2)["items"]
+    if not groups:
+        logger.error(f"no run group named '{run_group_name}'")
+        sys.exit(1)
+    if len(groups) > 1:
+        logger.warning(
+            f"multiple run groups named {run_group_name};"
+            " supply --run-group-id instead of --run-group to disambiguate"
+        )
+    id = groups[0]["id"]
+    logger.info(f"using run group id={id} name={run_group_name}")
+    return id
 
 
 if __name__ == "__main__":

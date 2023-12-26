@@ -88,10 +88,9 @@ pip3 install miniwdl-omics-run
 wget https://raw.githubusercontent.com/miniwdl-ext/miniwdl-omics-run/main/test/TestFlow.wdl
 
 miniwdl-omics-run TestFlow.wdl \
-    --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/poweromics \
-    --output-uri "s3://${AWS_ACCOUNT_ID}-${AWS_DEFAULT_REGION}-omics/test/out" \
     input_txt_file="s3://${AWS_ACCOUNT_ID}-${AWS_DEFAULT_REGION}-omics/test/test.txt" \
-    docker="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/omics:ubuntu-22.04"
+    docker="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/omics:ubuntu-22.04" \
+    --role poweromics --output-uri "s3://${AWS_ACCOUNT_ID}-${AWS_DEFAULT_REGION}-omics/test/out"
 ```
 
 This zips up [the specified WDL](https://raw.githubusercontent.com/miniwdl-ext/miniwdl-omics-run/main/test/TestFlow.wdl), registers it as an Omics workflow, validates the given inputs, and starts the workflow run.
@@ -104,7 +103,7 @@ The command-line interface accepts WDL inputs using the `input_key=value` syntax
 
 - Omics can use Docker images *only* from your ECR in the same account & region.
   - This often means pulling, re-tagging, and pushing images as illustrated above with `ubuntu:22.04`.
-  - And editing any WDL tasks that hard-code public registries in their `runtime.docker`.
+  - And editing any WDL tasks that hard-code docker image tags to take them as inputs instead.
   - Each ECR repository must have the Omics-specific repository policy set as shown above.
   - We therefore tend to use a single ECR repository for multiple Docker images, disambiguating them using lengthier tags.
   - If you prefer to use per-image repositories, just remember to set the repository policy on each one.

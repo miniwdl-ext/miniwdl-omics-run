@@ -6,7 +6,7 @@ This command-line tool makes it easier to launch [WDL](https://openwdl.org/) run
 pip3 install miniwdl-omics-run
 
 miniwdl-omics-run \
-    --role-arn {SERVICE_ROLE_ARN} \
+    --role {SERVICE_ROLE_NAME} \
     --output-uri s3://{BUCKET_NAME}/{PREFIX} \
     {MAIN_WDL_FILE} input1=value1 input2=value2 ...
 ```

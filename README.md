@@ -77,6 +77,7 @@ ECR_ENDPT="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
 aws ecr get-login-password | docker login --username AWS --password-stdin "$ECR_ENDPT"
 
 docker pull ubuntu:22.04
+docker pull --platform linux/amd64 ubuntu:22.04
 docker tag ubuntu:22.04 "${ECR_ENDPT}/omics:ubuntu-22.04"
 docker push "${ECR_ENDPT}/omics:ubuntu-22.04"
 ```

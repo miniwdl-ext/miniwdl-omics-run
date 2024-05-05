@@ -10,7 +10,7 @@ dynamic = ["version"]
 readme = "./README.md"
 dependencies = [
   "miniwdl>=1.9.1,<2",
-  "boto3>=1.26.42",
+  "boto3>=1.34.98",
 ]
 requires-python = "~=3.8"
 urls = { repository = "https://github.com/miniwdl-ext/miniwdl-omics-run.git" }
@@ -29,7 +29,6 @@ dev = [
   "build",
   "twine",
   "pre-commit",
-  "black",
   "ruff",
 ]
 
@@ -43,5 +42,5 @@ version = {attr = "miniwdl_omics_run._version.__version__"}
 
 
 [tool.ruff]
-select = ["E", "F", "I"]
+lint.select = ["E", "F", "I"]
 line-length = 88

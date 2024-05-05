@@ -211,6 +211,12 @@ def arg_parser():
         help="Storage capacity in gigabytes",
         default=None,
     )
+    group.add_argument(
+        "--storage-type",
+        type=str,
+        choices=["STATIC", "DYNAMIC"],
+        default=None,
+    )
 
     return parser
 
@@ -225,6 +231,8 @@ def start_run_options(args):
         ans["runGroupId"] = args.run_group_id
     if args.storage_capacity is not None:
         ans["storageCapacity"] = args.storage_capacity
+    if args.storage_type is not None:
+        ans["storageType"] = args.storage_type
     return ans
 
 
@@ -254,7 +262,9 @@ def check_s3_uri_arg(x):
 
 def check_uri_input(path, _is_directory):
     if not (is_s3_uri(path) or is_omics_uri(path)):
-        raise WDL.Error.InputError("File/Directory input is not a s3:// nor an omics:// URI: " + path)
+        raise WDL.Error.InputError(
+            "File/Directory input is not a s3:// nor an omics:// URI: " + path
+        )
     return path
 
 

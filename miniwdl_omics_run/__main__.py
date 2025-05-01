@@ -100,6 +100,10 @@ def main(argv=sys.argv):
         if args.build:
             print(json.dumps({"workflowId": workflow_id}, indent=2))
             sys.exit(0)
+        
+        if args.cache_behavior != "NO_CACHE":
+            cache_id = ensure_omics_cache(logger, omics, wdl_exe, args.cache_location, args.cache_behavior)
+            args.cache_id = cache_id
 
         # start run
         res = omics.start_run(
@@ -121,6 +125,7 @@ def main(argv=sys.argv):
         "runConsole": f"https://{aws_region}.console.aws.amazon.com/omics/home"
         f"?region={aws_region}#/runs/{run_id}",
     }
+
     print(json.dumps(run_info, indent=2))
 
 
@@ -217,6 +222,18 @@ def arg_parser():
         choices=["STATIC", "DYNAMIC"],
         default=None,
     )
+    group.add_argument(
+        "--cache-behavior",
+        type=str,
+        choices=["CACHE_ON_FAILURE", "CACHE_ALWAYS","NO_CACHE"],
+        default="NO_CACHE",
+    )
+    group.add_argument(
+        "--cache-location",
+        type=str,
+        help="Cache location (S3 URI)",
+        default=None,
+    )
 
     return parser
 
@@ -233,6 +250,9 @@ def start_run_options(args):
         ans["storageCapacity"] = args.storage_capacity
     if args.storage_type is not None:
         ans["storageType"] = args.storage_type
+    if args.cache_behavior is not None and args.cache_behavior != "NO_CACHE":
+        ans["cacheBehavior"] = args.cache_behavior
+        ans["cacheId"] = args.cache_id
     return ans
 
 
@@ -274,11 +294,9 @@ def ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe):
     one if found, otherwise creating it.
     """
 
-    # Embed a content digest of the WDL source code into the workflow name. We assume
-    # 16 characters of the digest is practically sufficient.
     omics_workflow_name = wdl_exe.name[:111] + "." + wdl_exe.digest[:16]
 
-    # Look for an existing workflow with this name
+    # Look for an existing workflow cache with this name
     existing_count = 0
     existing_id = None
     for page in omics.get_paginator("list_workflows").paginate(
@@ -308,6 +326,58 @@ def ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe):
         logger, cleanup, omics, omics_workflow_name, wdl_doc, wdl_exe
     )
 
+def ensure_omics_cache(logger, omics, wdl_exe, cache_uri, cache_behavior):
+    """
+    Get an Omics workflow id suitable for running the given WDL -- reusing an existing
+    one if found, otherwise creating it.
+    """
+
+    # Embed a content digest of the WDL source code into the workflow name. We assume
+    # 16 characters of the digest is practically sufficient.
+    omics_workflow_name = wdl_exe.name[:111]
+
+    # Look for an existing workflow with this name
+    existing_count = 0
+    existing_id = None
+    for page in omics.get_paginator("list_run_caches").paginate():
+        for existing in page["items"]:
+            if existing["name"] == f"{omics_workflow_name}_{cache_behavior}":
+                existing_count += 1
+                existing_id = existing["id"]
+
+    if existing_id is not None:
+        if existing_count > 1:
+            logger.warning(
+                f"multiple existing Omics caches named {omics_workflow_name}_{cache_behavior}"
+                f"; using arbitrary one ({existing_id})"
+            )
+        else:
+            logger.info(
+                f"using existing Omics cache id={existing_id} name={omics_workflow_name}_{cache_behavior}"
+            )
+        return existing_id
+
+    # Otherwise, create one
+    return create_omics_cache(
+        logger, omics, omics_workflow_name, cache_uri, cache_behavior
+    )
+
+def create_omics_cache(logger, omics, workflow_name, cache_uri, cache_behavior):
+    """
+    Create a new Omics cache for this WDL
+    """
+    if cache_uri is None:
+        logger.error(f"No cache exists for {workflow_name} cache location to be created must be specified")
+        sys.exit(1)
+    res = omics.create_run_cache(
+        name=f"{workflow_name}_{cache_behavior}",
+        description="miniwdl-omics-run cache",
+        cacheS3Location=cache_uri,
+        cacheBehavior=cache_behavior,
+    )
+    cache_id = res["id"]
+    logger.info(f"created Omics cache id={cache_id} name={workflow_name}_{cache_behavior}")
+    return cache_id
 
 def create_omics_workflow(logger, cleanup, omics, workflow_name, wdl_doc, wdl_exe):
     """

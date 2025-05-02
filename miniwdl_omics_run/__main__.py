@@ -304,7 +304,7 @@ def ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe):
 
     omics_workflow_name = wdl_exe.name[:111] + "." + wdl_exe.digest[:16]
 
-    # Look for an existing workflow cache with this name
+    # Look for an existing workflow with this name
     existing_count = 0
     existing_id = None
     for page in omics.get_paginator("list_workflows").paginate(

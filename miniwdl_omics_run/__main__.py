@@ -227,13 +227,13 @@ def arg_parser():
     cache_group = group.add_mutually_exclusive_group(required=False)
     cache_group.add_argument(
         "--cache",
-        help="Cache name",
+        help="Name of hte existing cache to use",
         type=str
     )
     cache_group.add_argument(
         "--cache-id",
         type=str,
-        help="Cache id",
+        help="Cache id of the existing cache to use",
     )
     group.add_argument(
         "--cache-behavior",

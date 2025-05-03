@@ -108,3 +108,4 @@ The command-line interface accepts WDL inputs using the `input_key=value` syntax
   - We therefore tend to use a single ECR repository for multiple Docker images, disambiguating them using lengthier tags.
   - If you prefer to use per-image repositories, just remember to set the repository policy on each one.
 - To quickly list a workflow's inputs, try `miniwdl run workflow.wdl ?`
+- To use [call caching](https://docs.aws.amazon.com/omics/latest/dev/workflows-call-caching.html), create a run cache using the console or CLI and pass `--cache {NAME}` or `--cache-id {ID}` to `miniwdl-omics-run`.

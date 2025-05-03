@@ -100,11 +100,15 @@ def main(argv=sys.argv):
         if args.build:
             print(json.dumps({"workflowId": workflow_id}, indent=2))
             sys.exit(0)
-        
-        if args.cache_behavior != "NO_CACHE" and args.cache_behavior is not None:
-            assert args.cache is not None or args.cache_id is not None, "supply --cache or --cache-id if want to use cache"
-            cache_id = ensure_omics_cache(logger, omics, args.cache, args.cache_id)
-            args.cache_id = cache_id
+
+        # resolve run cache if requested
+        if args.cache or args.cache_id:
+            args.cache_id = resolve_omics_cache(
+                logger, omics, args.cache, args.cache_id
+            )
+        elif args.cache_behavior is not None:
+            logger.error("must supply --cache or --cache-id to use --cache-behavior")
+            sys.exit(1)
 
         # start run
         res = omics.start_run(
@@ -128,6 +132,15 @@ def main(argv=sys.argv):
     }
 
     print(json.dumps(run_info, indent=2))
+
+
+_CACHE_BEHAVIOR_MAP = {
+    "no": "NO_CACHE",
+    "failure": "CACHE_ON_FAILURE",
+    "always": "CACHE_ALWAYS",
+}
+for k, v in list(_CACHE_BEHAVIOR_MAP.items()):
+    _CACHE_BEHAVIOR_MAP[v] = v
 
 
 def arg_parser():
@@ -225,22 +238,17 @@ def arg_parser():
     )
 
     cache_group = group.add_mutually_exclusive_group(required=False)
-    cache_group.add_argument(
-        "--cache",
-        help="Name of hte existing cache to use",
-        type=str
-    )
+    cache_group.add_argument("--cache", help="Cache name", type=str)
     cache_group.add_argument(
         "--cache-id",
         type=str,
-        help="Cache id of the existing cache to use",
+        help="Cache ID (saves API call to resolve --cache)",
     )
     group.add_argument(
         "--cache-behavior",
-        type=str,
-        choices=["NO_CACHE", "CACHE_ON_FAILURE", "CACHE_ALWAYS"],
-        default="NO_CACHE",
-        help="Cache behavior, default: NO_CACHE",
+        choices=_CACHE_BEHAVIOR_MAP.keys(),
+        default=None,
+        help="Cache behavior override",
     )
 
     return parser
@@ -258,9 +266,10 @@ def start_run_options(args):
         ans["storageCapacity"] = args.storage_capacity
     if args.storage_type is not None:
         ans["storageType"] = args.storage_type
-    if args.cache_behavior is not None and args.cache_behavior != "NO_CACHE":
-        ans["cacheBehavior"] = args.cache_behavior
+    if args.cache_id is not None:
         ans["cacheId"] = args.cache_id
+    if args.cache_behavior is not None:
+        ans["cacheBehavior"] = _CACHE_BEHAVIOR_MAP[args.cache_behavior]
     return ans
 
 
@@ -333,40 +342,6 @@ def ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe):
     return create_omics_workflow(
         logger, cleanup, omics, omics_workflow_name, wdl_doc, wdl_exe
     )
-
-def ensure_omics_cache(logger, omics, cache_name, cache_id):
-    """
-    Get an Omics cache ID if needed by cache_name or cache_id
-    """
-
-    if cache_id is not None:
-        return cache_id
-    # Look for an existing workflow with this name
-    existing_count = 0
-    existing_id = None
-    for page in omics.get_paginator("list_run_caches").paginate():
-        for existing in page["items"]:
-            if existing["name"] == cache_name:
-                existing_count += 1
-                existing_id = existing["id"]
-
-    if existing_id is not None:
-        if existing_count > 1:
-            logger.warning(
-                f"multiple existing Omics caches named {cache_name}"
-                f"; using arbitrary one ({existing_id})"
-            )
-        else:
-            logger.info(
-                f"using existing Omics cache id={existing_id} name={cache_name}"
-            )
-        return existing_id
-
-    # Otherwise, fail
-    logger.error(
-        f"no Omics cache named {cache_name} found; supply --cache-id"
-    )
-    sys.exit(1)
 
 
 def create_omics_workflow(logger, cleanup, omics, workflow_name, wdl_doc, wdl_exe):
@@ -464,6 +439,34 @@ def resolve_run_group_id(logger, omics, run_group_name):
     id = groups[0]["id"]
     logger.info(f"using run group id={id} name={run_group_name}")
     return id
+
+
+def resolve_omics_cache(logger, omics, cache_name, cache_id):
+    if cache_id is not None:
+        return cache_id
+
+    existing_count = 0
+    existing_id = None
+    for page in omics.get_paginator("list_run_caches").paginate():
+        for existing in page["items"]:
+            if existing["name"] == cache_name:
+                existing_count += 1
+                existing_id = existing["id"]
+
+    if existing_id is not None:
+        if existing_count > 1:
+            logger.warning(
+                f"multiple existing Omics caches named {cache_name}"
+                f"; using arbitrary one ({existing_id})"
+            )
+        else:
+            logger.info(f"using Omics cache id={existing_id} name={cache_name}")
+        return existing_id
+
+    logger.error(
+        f"no Omics cache named '{cache_name}' found; check name or supply --cache-id"
+    )
+    sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -311,6 +311,8 @@ def ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe):
     one if found, otherwise creating it.
     """
 
+    # Embed a content digest of the WDL source code into the workflow name. We assume
+    # 16 characters of the digest is practically sufficient.
     omics_workflow_name = wdl_exe.name[:111] + "." + wdl_exe.digest[:16]
 
     # Look for an existing workflow with this name

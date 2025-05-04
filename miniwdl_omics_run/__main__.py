@@ -90,9 +90,6 @@ def main(argv=sys.argv):
             "omics", config=botocore.config.Config(retries={"mode": "standard"})
         )
         if args.run_group:
-            if args.run_group_id:
-                logger.error("supply only one of --run-group or --run-group-id")
-                sys.exit(1)
             args.run_group_id = resolve_run_group_id(logger, omics, args.run_group)
         workflow_id = ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe)
         await_omics_workflow(logger, omics, workflow_id)
@@ -103,9 +100,7 @@ def main(argv=sys.argv):
 
         # resolve run cache if requested
         if args.cache or args.cache_id:
-            args.cache_id = resolve_omics_cache(
-                logger, omics, args.cache, args.cache_id
-            )
+            args.cache_id = resolve_cache_id(logger, omics, args.cache, args.cache_id)
         elif args.cache_behavior is not None:
             logger.error("must supply --cache or --cache-id to use --cache-behavior")
             sys.exit(1)
@@ -217,8 +212,14 @@ def arg_parser():
     )
     group.add_argument("--name", type=str, help="Run name", default=None)
     group.add_argument("--priority", type=int, help="Priority (integer)", default=None)
-    group.add_argument("--run-group", type=str, help="Run group name", default=None)
-    group.add_argument(
+    run_group = group.add_mutually_exclusive_group(required=False)
+    run_group.add_argument(
+        "--run-group",
+        type=str,
+        help="Run group name",
+        default=None,
+    )
+    run_group.add_argument(
         "--run-group-id",
         type=str,
         help="Run group ID (saves API call to resolve --run-group)",
@@ -227,13 +228,14 @@ def arg_parser():
     group.add_argument(
         "--storage-capacity",
         type=int,
-        help="Storage capacity in gigabytes",
+        help="Static run storage capacity, in gigabytes",
         default=None,
     )
     group.add_argument(
         "--storage-type",
         type=str,
-        choices=["STATIC", "DYNAMIC"],
+        choices=["static", "STATIC", "dynamic", "DYNAMIC"],
+        help="Run storage type",
         default=None,
     )
 
@@ -255,21 +257,20 @@ def arg_parser():
 
 
 def start_run_options(args):
+    mappings = [
+        ("name", "name", None),
+        ("priority", "priority", None),
+        ("run_group_id", "runGroupId", None),
+        ("storage_capacity", "storageCapacity", None),
+        ("storage_type", "storageType", lambda v: v.upper()),
+        ("cache_id", "cacheId", None),
+        ("cache_behavior", "cacheBehavior", lambda v: _CACHE_BEHAVIOR_MAP[v]),
+    ]
     ans = {}
-    if args.name is not None:
-        ans["name"] = args.name
-    if args.priority is not None:
-        ans["priority"] = args.priority
-    if args.run_group_id is not None:
-        ans["runGroupId"] = args.run_group_id
-    if args.storage_capacity is not None:
-        ans["storageCapacity"] = args.storage_capacity
-    if args.storage_type is not None:
-        ans["storageType"] = args.storage_type
-    if args.cache_id is not None:
-        ans["cacheId"] = args.cache_id
-    if args.cache_behavior is not None:
-        ans["cacheBehavior"] = _CACHE_BEHAVIOR_MAP[args.cache_behavior]
+    for attr, key, transform in mappings:
+        val = getattr(args, attr)
+        if val is not None:
+            ans[key] = transform(val) if transform else val
     return ans
 
 
@@ -443,7 +444,7 @@ def resolve_run_group_id(logger, omics, run_group_name):
     return id
 
 
-def resolve_omics_cache(logger, omics, cache_name, cache_id):
+def resolve_cache_id(logger, omics, cache_name, cache_id):
     if cache_id is not None:
         return cache_id
 

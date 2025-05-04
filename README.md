@@ -109,3 +109,4 @@ The command-line interface accepts WDL inputs using the `input_key=value` syntax
   - If you prefer to use per-image repositories, just remember to set the repository policy on each one.
 - To quickly list a workflow's inputs, try `miniwdl run workflow.wdl ?`
 - To use [call caching](https://docs.aws.amazon.com/omics/latest/dev/workflows-call-caching.html), create a run cache using the console or CLI and pass `--cache {NAME}` or `--cache-id {ID}` to `miniwdl-omics-run`.
+- To use [dynamic run storage](https://docs.aws.amazon.com/omics/latest/dev/workflows-run-types.html), pass `--storage-type dynamic`.

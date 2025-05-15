@@ -129,3 +129,6 @@ dmypy.json
 .pyre/
 
 miniwdl_omics_run/_version.py
+
+# IntelliJ/ PyCharm
+.idea/

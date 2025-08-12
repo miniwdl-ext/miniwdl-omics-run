@@ -238,6 +238,13 @@ def arg_parser():
         help="Run storage type",
         default=None,
     )
+    group.add_argument(
+        "--retention-mode",
+        type=str,
+        choices=["retain", "RETAIN", "remove", "REMOVE"],
+        help="Run retention mode",
+        default=None,
+    )
 
     cache_group = group.add_mutually_exclusive_group(required=False)
     cache_group.add_argument("--cache", help="Cache name", type=str)
@@ -265,6 +272,7 @@ def start_run_options(args):
         ("storage_type", "storageType", lambda v: v.upper()),
         ("cache_id", "cacheId", None),
         ("cache_behavior", "cacheBehavior", lambda v: _CACHE_BEHAVIOR_MAP[v]),
+        ("retention_mode", "retentionMode", lambda v: v.upper()),
     ]
     ans = {}
     for attr, key, transform in mappings:

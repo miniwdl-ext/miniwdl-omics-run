@@ -238,13 +238,12 @@ def arg_parser():
         help="Run storage type",
         default=None,
     )
-
     group.add_argument(
         "--retention-mode",
         type=str,
         choices=["retain", "RETAIN", "remove", "REMOVE"],
         help="Run retention mode",
-        default="RETAIN",
+        default=None,
     )
 
     cache_group = group.add_mutually_exclusive_group(required=False)

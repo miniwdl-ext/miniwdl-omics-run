@@ -11,6 +11,7 @@ from contextlib import ExitStack
 
 import boto3
 import botocore.config
+import botocore.exceptions
 import WDL
 import WDL.CLI
 from WDL._util import configure_logger

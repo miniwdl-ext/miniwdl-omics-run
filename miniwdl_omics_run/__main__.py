@@ -272,12 +272,14 @@ def arg_parser():
         help="Cache behavior override",
     )
 
-    # Legacy behavior switch: keep old naming (digest in workflow name) and skip versions/tags
+    # Legacy behavior switch: keep old naming (digest in workflow name)
+    # and skip versions/tags
     parser.add_argument(
         "--legacy-workflow-name",
         action="store_true",
         help=(
-            "Use legacy workflow naming (embed WDL digest in workflow name; no workflow versions/tags). "
+            "Use legacy workflow naming (embed WDL digest in workflow name; "
+            "no workflow versions/tags). "
             "Can also set MINIWDL_OMICS_LEGACY_NAMES=1 in the environment."
         ),
     )
@@ -338,7 +340,8 @@ def check_uri_input(path, _is_directory):
 
 def select_existing_workflow_id(logger, omics, name, require_tag=None):
     """
-    Find an existing PRIVATE workflow by name (and optional tag), skipping DELETED/FAILED.
+    Find an existing PRIVATE workflow by name (and optional tag),
+    skipping DELETED/FAILED.
     If multiple matches, warn and select the first. Logs the choice and returns the id,
     or None if no suitable workflow exists.
 
@@ -365,7 +368,9 @@ def select_existing_workflow_id(logger, omics, name, require_tag=None):
     workflow_id = matches[0]["id"]
     if len(matches) > 1:
         logger.warning(
-            f"multiple existing Omics workflows named {name}; using arbitrary one ({workflow_id})"
+            "multiple existing Omics workflows named %s; using arbitrary one (%s)",
+            name,
+            workflow_id,
         )
     return workflow_id
 
@@ -402,8 +407,9 @@ def ensure_omics_workflow_legacy(logger, cleanup, omics, wdl_doc, wdl_exe):
 
 def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
     """
-    Ensure a base Omics workflow named exactly as the WDL workflow name (tagged for this tool),
-    and ensure a workflow version named by the WDL content digest. Returns (workflow_id, version_name).
+    Ensure a base Omics workflow named exactly as the WDL workflow name
+    (tagged for this tool), and ensure a workflow version named by the
+    WDL content digest. Returns (workflow_id, version_name).
     """
     TAG_KEY = "miniwdl-omics-run"
     TAG_VAL = "yes"
@@ -441,12 +447,16 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
         else str(wdl_exe.digest)[:64]
     )
 
+    existing_version = None
     try:
         existing_version = omics.get_workflow_version(
             workflowId=workflow_id, versionName=version_name, type="PRIVATE"
         )
         logger.info(
-            f"using existing Omics workflow id={workflow_id} name={base_name} version={version_name}"
+            "using existing Omics workflow id=%s name=%s version=%s",
+            workflow_id,
+            base_name,
+            version_name,
         )
     except botocore.exceptions.ClientError as ce:
         code = ce.response.get("Error", {}).get("Code", "")
@@ -468,7 +478,10 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
             tags={TAG_KEY: TAG_VAL},
         )
         logger.info(
-            f"created Omics workflow id={workflow_id} name={base_name} version={version_name}"
+            "created Omics workflow id=%s name=%s version=%s",
+            workflow_id,
+            base_name,
+            version_name,
         )
 
     if not existing_version or existing_version.get("status") == "CREATING":

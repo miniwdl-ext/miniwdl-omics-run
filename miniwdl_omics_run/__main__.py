@@ -91,8 +91,17 @@ def main(argv=sys.argv):
         )
         if args.run_group:
             args.run_group_id = resolve_run_group_id(logger, omics, args.run_group)
-        workflow_id = ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe)
-        await_omics_workflow(logger, omics, workflow_id)
+
+        workflow_version_name = None
+        if args.legacy_workflow_name:
+            workflow_id = ensure_omics_workflow_legacy(
+                logger, cleanup, omics, wdl_doc, wdl_exe
+            )
+        else:
+            # New versioned workflow behavior
+            workflow_id, workflow_version_name = ensure_omics_workflow_and_version(
+                logger, cleanup, omics, wdl_doc, wdl_exe
+            )
 
         if args.build:
             print(json.dumps({"workflowId": workflow_id}, indent=2))
@@ -106,7 +115,7 @@ def main(argv=sys.argv):
             sys.exit(1)
 
         # start run
-        res = omics.start_run(
+        start_kwargs = dict(
             outputUri=args.output_uri,
             parameters=input_dict,
             roleArn=args.role_arn,
@@ -116,6 +125,9 @@ def main(argv=sys.argv):
             requestId=str(uuid.uuid4()),
             **start_run_options(args),
         )
+        if workflow_version_name:
+            start_kwargs["workflowVersionName"] = workflow_version_name
+        res = omics.start_run(**start_kwargs)
 
     run_id = res["id"]
     aws_region = omics.meta.region_name
@@ -260,6 +272,16 @@ def arg_parser():
         help="Cache behavior override",
     )
 
+    # Legacy behavior switch: keep old naming (digest in workflow name) and skip versions/tags
+    parser.add_argument(
+        "--legacy-workflow-name",
+        action="store_true",
+        help=(
+            "Use legacy workflow naming (embed WDL digest in workflow name; no workflow versions/tags). "
+            "Can also set MINIWDL_OMICS_LEGACY_NAMES=1 in the environment."
+        ),
+    )
+
     return parser
 
 
@@ -314,48 +336,156 @@ def check_uri_input(path, _is_directory):
     return path
 
 
-def ensure_omics_workflow(logger, cleanup, omics, wdl_doc, wdl_exe):
+def select_existing_workflow_id(logger, omics, name, require_tag=None):
     """
-    Get an Omics workflow id suitable for running the given WDL -- reusing an existing
-    one if found, otherwise creating it.
+    Find an existing PRIVATE workflow by name (and optional tag), skipping DELETED/FAILED.
+    If multiple matches, warn and select the first. Logs the choice and returns the id,
+    or None if no suitable workflow exists.
+
+    require_tag: tuple (key, value) to require tags[key] == value via get_workflow.
+    """
+    matches = []
+    for page in omics.get_paginator("list_workflows").paginate(
+        name=name, type="PRIVATE"
+    ):
+        for item in page.get("items", []):
+            if item.get("status") in ("DELETED", "FAILED"):
+                continue
+            if require_tag:
+                key, val = require_tag
+                details = omics.get_workflow(export=[], id=item["id"], type="PRIVATE")
+                tags = details.get("tags", {}) or {}
+                if tags.get(key) != val:
+                    continue
+            matches.append(item)
+
+    if not matches:
+        return None
+
+    workflow_id = matches[0]["id"]
+    if len(matches) > 1:
+        logger.warning(
+            f"multiple existing Omics workflows named {name}; using arbitrary one ({workflow_id})"
+        )
+    return workflow_id
+
+
+def ensure_omics_workflow_legacy(logger, cleanup, omics, wdl_doc, wdl_exe):
+    """
+    Legacy behavior: derive workflow name by embedding a short WDL content digest into
+    the name and do not use workflow versions/tags. Retained for backward compatibility.
+    Ensures the workflow exists and is ready (not CREATING) before returning its id.
     """
 
     # Embed a content digest of the WDL source code into the workflow name. We assume
     # 16 characters of the digest is practically sufficient.
     omics_workflow_name = wdl_exe.name[:111] + "." + wdl_exe.digest[:16]
 
-    # Look for an existing workflow with this name
-    existing_count = 0
-    existing_id = None
-    for page in omics.get_paginator("list_workflows").paginate(
-        name=omics_workflow_name, type="PRIVATE"
-    ):
-        for existing in page["items"]:
-            if existing["status"] in ("DELETED", "FAILED"):
-                continue
-            existing_count += 1
-            existing_id = existing["id"]
+    workflow_id = select_existing_workflow_id(logger, omics, omics_workflow_name)
+    if workflow_id:
+        logger.info(
+            f"using existing Omics workflow id={workflow_id} name={omics_workflow_name}"
+        )
+    else:
+        workflow_id = create_omics_workflow(
+            logger, cleanup, omics, omics_workflow_name, wdl_doc, wdl_exe
+        )
 
-    if existing_id is not None:
-        if existing_count > 1:
-            logger.warning(
-                f"multiple existing Omics workflows named {omics_workflow_name}"
-                f"; using arbitrary one ({existing_id})"
-            )
-        else:
-            logger.info(
-                f"using existing Omics workflow id={existing_id} name="
-                + omics_workflow_name
-            )
-        return existing_id
+    # Wait for workflow to finish creating
+    await_omics_entity(
+        logger,
+        lambda: omics.get_workflow(export=[], id=workflow_id, type="PRIVATE"),
+        f"Omics workflow {workflow_id}",
+    )
+    return workflow_id
 
-    # Otherwise, create one
-    return create_omics_workflow(
-        logger, cleanup, omics, omics_workflow_name, wdl_doc, wdl_exe
+
+def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
+    """
+    Ensure a base Omics workflow named exactly as the WDL workflow name (tagged for this tool),
+    and ensure a workflow version named by the WDL content digest. Returns (workflow_id, version_name).
+    """
+    TAG_KEY = "miniwdl-omics-run"
+    TAG_VAL = "yes"
+
+    # Base workflow name matches WDL workflow name exactly
+    base_name = wdl_exe.name[:128]
+
+    # Try to find an existing base workflow with our tag
+    workflow_id = select_existing_workflow_id(
+        logger,
+        omics,
+        base_name,
+        require_tag=(TAG_KEY, TAG_VAL),
     )
 
+    if not workflow_id:
+        # Create base workflow with tag
+        workflow_id = create_omics_workflow(
+            logger, cleanup, omics, base_name, wdl_doc, wdl_exe, tags={TAG_KEY: TAG_VAL}
+        )
 
-def create_omics_workflow(logger, cleanup, omics, workflow_name, wdl_doc, wdl_exe):
+    # Ensure base workflow is ready before creating/using versions
+    await_omics_entity(
+        logger,
+        lambda: omics.get_workflow(export=[], id=workflow_id, type="PRIVATE"),
+        f"Omics workflow {workflow_id}",
+    )
+
+    # Ensure version
+    parameter_template = parameter_template_from_wdl(wdl_exe)
+    wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
+    version_name = (
+        wdl_exe.digest[:64]
+        if isinstance(wdl_exe.digest, str)
+        else str(wdl_exe.digest)[:64]
+    )
+
+    try:
+        existing_version = omics.get_workflow_version(
+            workflowId=workflow_id, versionName=version_name, type="PRIVATE"
+        )
+        logger.info(
+            f"using existing Omics workflow id={workflow_id} name={base_name} version={version_name}"
+        )
+    except botocore.exceptions.ClientError as ce:
+        code = ce.response.get("Error", {}).get("Code", "")
+        status = ce.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        not_found = (
+            code in ("NotFoundException", "ResourceNotFoundException") or status == 404
+        )
+        if not not_found:
+            raise
+
+    if not existing_version:
+        omics.create_workflow_version(
+            workflowId=workflow_id,
+            versionName=version_name,
+            definitionZip=wdl_zip,
+            engine="WDL",
+            main=os.path.basename(wdl_doc.pos.abspath),
+            parameterTemplate=parameter_template,
+            tags={TAG_KEY: TAG_VAL},
+        )
+        logger.info(
+            f"created Omics workflow id={workflow_id} name={base_name} version={version_name}"
+        )
+
+    if not existing_version or existing_version.get("status") == "CREATING":
+        # Wait for version to finish creating
+        await_omics_entity(
+            logger,
+            lambda: omics.get_workflow_version(
+                workflowId=workflow_id, versionName=version_name, type="PRIVATE"
+            ),
+            f"Omics workflow id={workflow_id} name={base_name} version={version_name}",
+        )
+    return workflow_id, version_name
+
+
+def create_omics_workflow(
+    logger, cleanup, omics, workflow_name, wdl_doc, wdl_exe, tags=None
+):
     """
     Create a new Omics workflow for this WDL
     """
@@ -364,29 +494,37 @@ def create_omics_workflow(logger, cleanup, omics, workflow_name, wdl_doc, wdl_ex
     wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
 
     # formulate the Omics parameter template based on the WDL inputs
-    parameter_template = {}
-    for b in wdl_exe.available_inputs:
-        parameter_template[b.name] = {
-            "description": b.name,  # TODO: get from parameter_meta
-            "optional": b.name not in wdl_exe.required_inputs,
-        }
+    parameter_template = parameter_template_from_wdl(wdl_exe)
 
     # create workflow
     logger.debug(
         f"creating Omics workflow {workflow_name} with parameter template: "
         + json.dumps(parameter_template)
     )
-    res = omics.create_workflow(
+    kwargs = dict(
         definitionZip=wdl_zip,
         engine="WDL",
         main=os.path.basename(wdl_doc.pos.abspath),
         name=workflow_name,
         parameterTemplate=parameter_template,
     )
+    if tags:
+        kwargs["tags"] = tags
+    res = omics.create_workflow(**kwargs)
     workflow_id = res["id"]
     logger.info(f"created Omics workflow id={workflow_id} name={workflow_name}")
 
     return workflow_id
+
+
+def parameter_template_from_wdl(wdl_exe):
+    parameter_template = {}
+    for b in wdl_exe.available_inputs:
+        parameter_template[b.name] = {
+            "description": b.name,  # TODO: get from parameter_meta
+            "optional": b.name not in wdl_exe.required_inputs,
+        }
+    return parameter_template
 
 
 def zip_wdl(logger, cleanup, wdl_doc):
@@ -406,24 +544,42 @@ def zip_wdl(logger, cleanup, wdl_doc):
     return zip_data
 
 
-def await_omics_workflow(logger, omics, workflow_id):
+def await_omics_entity(
+    logger,
+    fetch_fn,
+    entity_description: str,
+    creating_statuses=("CREATING",),
+    failed_statuses=("FAILED",),
+):
     """
-    Wait for Omics workflow to finish CREATING
+    Polls fetch_fn() until the entity status is no longer in creating_statuses.
+    Exits non-zero if status enters failed_statuses. Logs status messages along the way.
     """
+    last_details = None
     while True:
-        workflow_details = omics.get_workflow(export=[], id=workflow_id, type="PRIVATE")
-        status = workflow_details["status"]
-        msg = f"Omics workflow {workflow_id} status {status}, " + workflow_details.get(
+        details = fetch_fn()
+        last_details = details
+        status = details.get("status")
+        msg = f"{entity_description} status {status}, " + details.get(
             "statusMessage", "(no status message)"
         )
-        if status == "FAILED":
+        if status in failed_statuses:
             logger.error(msg)
             sys.exit(2)
         logger.debug(msg)
-        if status != "CREATING":
+        if status not in creating_statuses:
             break
         time.sleep(1)
-    logger.debug("workflow details: " + str(workflow_details))
+    logger.debug("entity details: " + str(last_details))
+
+
+def await_omics_workflow(logger, omics, workflow_id):
+    """Compatibility wrapper to await a workflow finishing CREATING."""
+    return await_omics_entity(
+        logger,
+        lambda: omics.get_workflow(export=[], id=workflow_id, type="PRIVATE"),
+        f"Omics workflow {workflow_id}",
+    )
 
 
 def resolve_iam_role_arn(logger, role_name):

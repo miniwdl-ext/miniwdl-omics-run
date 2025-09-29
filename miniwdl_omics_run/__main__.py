@@ -133,6 +133,7 @@ def main(argv=sys.argv):
     aws_region = omics.meta.region_name
     run_info = {
         "workflowId": workflow_id,
+        "workflowVersionName": workflow_version_name,
         "runId": run_id,
         "runConsole": f"https://{aws_region}.console.aws.amazon.com/omics/home"
         f"?region={aws_region}#/runs/{run_id}",

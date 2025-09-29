@@ -257,6 +257,14 @@ def arg_parser():
         help="Run retention mode",
         default=None,
     )
+    group.add_argument(
+        "--legacy-workflow-name",
+        action="store_true",
+        help=(
+            "Use legacy workflow naming (no workflow versioning; each version is a "
+            "separate Omics workflow with version digest in the name)."
+        ),
+    )
 
     cache_group = group.add_mutually_exclusive_group(required=False)
     cache_group.add_argument("--cache", help="Cache name", type=str)
@@ -270,18 +278,6 @@ def arg_parser():
         choices=_CACHE_BEHAVIOR_MAP.keys(),
         default=None,
         help="Cache behavior override",
-    )
-
-    # Legacy behavior switch: keep old naming (digest in workflow name)
-    # and skip versions/tags
-    parser.add_argument(
-        "--legacy-workflow-name",
-        action="store_true",
-        help=(
-            "Use legacy workflow naming (embed WDL digest in workflow name; "
-            "no workflow versions/tags). "
-            "Can also set MINIWDL_OMICS_LEGACY_NAMES=1 in the environment."
-        ),
     )
 
     return parser
@@ -336,43 +332,6 @@ def check_uri_input(path, _is_directory):
             "File/Directory input is not a s3:// nor an omics:// URI: " + path
         )
     return path
-
-
-def select_existing_workflow_id(logger, omics, name, require_tag=None):
-    """
-    Find an existing PRIVATE workflow by name (and optional tag),
-    skipping DELETED/FAILED.
-    If multiple matches, warn and select the first. Logs the choice and returns the id,
-    or None if no suitable workflow exists.
-
-    require_tag: tuple (key, value) to require tags[key] == value via get_workflow.
-    """
-    matches = []
-    for page in omics.get_paginator("list_workflows").paginate(
-        name=name, type="PRIVATE"
-    ):
-        for item in page.get("items", []):
-            if item.get("status") in ("DELETED", "FAILED"):
-                continue
-            if require_tag:
-                key, val = require_tag
-                details = omics.get_workflow(export=[], id=item["id"], type="PRIVATE")
-                tags = details.get("tags", {}) or {}
-                if tags.get(key) != val:
-                    continue
-            matches.append(item)
-
-    if not matches:
-        return None
-
-    workflow_id = matches[0]["id"]
-    if len(matches) > 1:
-        logger.warning(
-            "multiple existing Omics workflows named %s; using arbitrary one (%s)",
-            name,
-            workflow_id,
-        )
-    return workflow_id
 
 
 def ensure_omics_workflow_legacy(logger, cleanup, omics, wdl_doc, wdl_exe):
@@ -441,11 +400,7 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
     # Ensure version
     parameter_template = parameter_template_from_wdl(wdl_exe)
     wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
-    version_name = (
-        wdl_exe.digest[:64]
-        if isinstance(wdl_exe.digest, str)
-        else str(wdl_exe.digest)[:64]
-    )
+    version_name = wdl_exe.digest[:16]
 
     existing_version = None
     try:
@@ -494,6 +449,43 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
             f"Omics workflow id={workflow_id} name={base_name} version={version_name}",
         )
     return workflow_id, version_name
+
+
+def select_existing_workflow_id(logger, omics, name, require_tag=None):
+    """
+    Find an existing PRIVATE workflow by name (and optional tag),
+    skipping DELETED/FAILED.
+    If multiple matches, warn and select the first. Logs the choice and returns the id,
+    or None if no suitable workflow exists.
+
+    require_tag: tuple (key, value) to require tags[key] == value via get_workflow.
+    """
+    matches = []
+    for page in omics.get_paginator("list_workflows").paginate(
+        name=name, type="PRIVATE"
+    ):
+        for item in page.get("items", []):
+            if item.get("status") in ("DELETED", "FAILED"):
+                continue
+            if require_tag:
+                key, val = require_tag
+                details = omics.get_workflow(export=[], id=item["id"], type="PRIVATE")
+                tags = details.get("tags", {}) or {}
+                if key not in tags or tags["key"] != val:
+                    continue
+            matches.append(item)
+
+    if not matches:
+        return None
+
+    workflow_id = matches[0]["id"]
+    if len(matches) > 1:
+        logger.warning(
+            "multiple existing Omics workflows named %s; using arbitrary one (%s)",
+            name,
+            workflow_id,
+        )
+    return workflow_id
 
 
 def create_omics_workflow(

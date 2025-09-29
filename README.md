@@ -95,23 +95,9 @@ miniwdl-omics-run TestFlow.wdl \
 
 This zips up [the specified WDL](https://raw.githubusercontent.com/miniwdl-ext/miniwdl-omics-run/main/test/TestFlow.wdl), registers it as an Omics workflow, validates the given inputs, and starts the workflow run.
 
-The WDL source code may be set to a local filename or a public HTTP(S) URL. The tool automatically bundles any WDL files imported by the main one. On subsequent invocations, it'll reuse the previously-registered workflow if the source code hasn't changed.
+The WDL source code may be set to a local filename or a public HTTP(S) URL. The tool automatically bundles any WDL files imported by the main one. On subsequent invocations, it'll reuse the previously-registered workflow if the source code hasn't changed, or add a new workflow version if it has. (Before Omics had workflow versioning, this tool appended a content digest to the workflow name; that behavior can be restored with `--legacy-workflow-name`.)
 
 The command-line interface accepts WDL inputs using the `input_key=value` syntax exactly like [`miniwdl run`](https://miniwdl.readthedocs.io/en/latest/runner_cli.html), including the option of a JSON file with `--input FILE.json`. Each input File must be set to an existing S3 URI accessible by the service role.
-
-## Workflow versioning behavior
-
-- Base workflow name equals the WDL workflow name (no digest suffix).
-- The WDL content digest (up to 64 chars) is used as the workflow version name.
-- On first encounter, the tool will:
-    - Create a PRIVATE workflow named after the WDL, tagged `miniwdl-omics-run: yes`.
-    - Immediately create a workflow version with the digest as the version name.
-    - Wait until the workflow version status is ACTIVE before starting a run.
-- Runs are started against that specific version via `workflowVersionName` to ensure the code matches the inputs you validated.
-
-Tagging note: miniwdl-omics-run only discovers/reuses workflows that carry the tag `miniwdl-omics-run: yes`, so it won’t touch your unrelated workflows. The tag is automatically applied when we create a workflow or version.
-
-Legacy mode: to keep the previous behavior (digest embedded in workflow name; no workflow versions/tags), use `--legacy-workflow-names` or set `MINIWDL_OMICS_LEGACY_NAMES=1`.
 
 ## Advice
 

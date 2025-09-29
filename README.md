@@ -110,5 +110,5 @@ The command-line interface accepts WDL inputs using the `input_key=value` syntax
 - To quickly list a workflow's inputs, try `miniwdl run workflow.wdl ?`
 - To use [call caching](https://docs.aws.amazon.com/omics/latest/dev/workflows-call-caching.html), create a run cache using the console or CLI and pass `--cache {NAME}` or `--cache-id {ID}` to `miniwdl-omics-run`.
 - To use [dynamic run storage](https://docs.aws.amazon.com/omics/latest/dev/workflows-run-types.html), pass `--storage-type dynamic`.
-- Omics imposes limits on the number of runs and versions per workflow; if you hit those, you'll need to go in through the Console/CLI/API to clear them out.
+- Omics has certain limits on the number of runs and versions per workflow; if you hit those, then you'll need to use the Console/CLI/API to clear them out.
 - Before Omics had workflow versioning, this tool created a separate Omics workflow for any change to the WDL, each named with a content digest suffix. That behavior can be restored with `--legacy-workflow-name`.

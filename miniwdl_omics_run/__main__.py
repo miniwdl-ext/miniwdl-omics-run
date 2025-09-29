@@ -257,14 +257,6 @@ def arg_parser():
         help="Run retention mode",
         default=None,
     )
-    group.add_argument(
-        "--legacy-workflow-name",
-        action="store_true",
-        help=(
-            "Use legacy workflow naming (no workflow versioning; each version is a "
-            "separate Omics workflow with version digest in the name)."
-        ),
-    )
 
     cache_group = group.add_mutually_exclusive_group(required=False)
     cache_group.add_argument("--cache", help="Cache name", type=str)
@@ -278,6 +270,15 @@ def arg_parser():
         choices=_CACHE_BEHAVIOR_MAP.keys(),
         default=None,
         help="Cache behavior override",
+    )
+
+    group.add_argument(
+        "--legacy-workflow-name",
+        action="store_true",
+        help=(
+            "Use legacy workflow naming (no workflow versioning; each version is a "
+            "separate Omics workflow with version digest in the name)."
+        ),
     )
 
     return parser

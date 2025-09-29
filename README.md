@@ -95,7 +95,7 @@ miniwdl-omics-run TestFlow.wdl \
 
 This zips up [the specified WDL](https://raw.githubusercontent.com/miniwdl-ext/miniwdl-omics-run/main/test/TestFlow.wdl), registers it as an Omics workflow, validates the given inputs, and starts the workflow run.
 
-The WDL source code may be set to a local filename or a public HTTP(S) URL. The tool automatically bundles any WDL files imported by the main one. On subsequent invocations, it'll reuse the previously-registered workflow if the source code hasn't changed, or add a new workflow version if it has. (Before Omics had workflow versioning, this tool appended a content digest to the workflow name; that behavior can be restored with `--legacy-workflow-name`.)
+The WDL source code may be set to a local filename or a public HTTP(S) URL. The tool automatically bundles any WDL files imported by the main one. On subsequent invocations, it'll reuse the previously-registered workflow if the source code hasn't changed, or add a new workflow version if it has.
 
 The command-line interface accepts WDL inputs using the `input_key=value` syntax exactly like [`miniwdl run`](https://miniwdl.readthedocs.io/en/latest/runner_cli.html), including the option of a JSON file with `--input FILE.json`. Each input File must be set to an existing S3 URI accessible by the service role.
 
@@ -110,3 +110,5 @@ The command-line interface accepts WDL inputs using the `input_key=value` syntax
 - To quickly list a workflow's inputs, try `miniwdl run workflow.wdl ?`
 - To use [call caching](https://docs.aws.amazon.com/omics/latest/dev/workflows-call-caching.html), create a run cache using the console or CLI and pass `--cache {NAME}` or `--cache-id {ID}` to `miniwdl-omics-run`.
 - To use [dynamic run storage](https://docs.aws.amazon.com/omics/latest/dev/workflows-run-types.html), pass `--storage-type dynamic`.
+- Omics imposes limits on the number of runs and versions per workflow; if you hit those, you'll need to go in through the Console/CLI/API to clear them out.
+- Before Omics had workflow versioning, this tool created a separate Omics workflow for any change to the WDL, each named with a content digest suffix. That behavior can be restored with `--legacy-workflow-name`.

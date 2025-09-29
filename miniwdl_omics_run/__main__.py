@@ -385,10 +385,19 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
         require_tag=(TAG_KEY, TAG_VAL),
     )
 
+    wdl_zip = None
+
     if not workflow_id:
-        # Create base workflow with tag
+        wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
         workflow_id = create_omics_workflow(
-            logger, cleanup, omics, base_name, wdl_doc, wdl_exe, tags={TAG_KEY: TAG_VAL}
+            logger,
+            cleanup,
+            omics,
+            base_name,
+            wdl_doc,
+            wdl_exe,
+            tags={TAG_KEY: TAG_VAL},
+            definition_zip=wdl_zip,
         )
 
     # Ensure base workflow is ready before creating/using versions
@@ -399,8 +408,6 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
     )
 
     # Ensure version
-    parameter_template = parameter_template_from_wdl(wdl_exe)
-    wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
     version_name = wdl_exe.digest[:16]
 
     existing_version = None
@@ -424,6 +431,10 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
             raise
 
     if not existing_version:
+        if wdl_zip is None:
+            wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
+        # Recompute parameter template
+        parameter_template = parameter_template_from_wdl(wdl_exe)
         omics.create_workflow_version(
             workflowId=workflow_id,
             versionName=version_name,
@@ -472,7 +483,7 @@ def select_existing_workflow_id(logger, omics, name, require_tag=None):
                 key, val = require_tag
                 details = omics.get_workflow(export=[], id=item["id"], type="PRIVATE")
                 tags = details.get("tags", {}) or {}
-                if key not in tags or tags["key"] != val:
+                if key not in tags or tags[key] != val:
                     continue
             matches.append(item)
 
@@ -490,16 +501,25 @@ def select_existing_workflow_id(logger, omics, name, require_tag=None):
 
 
 def create_omics_workflow(
-    logger, cleanup, omics, workflow_name, wdl_doc, wdl_exe, tags=None
+    logger,
+    cleanup,
+    omics,
+    workflow_name,
+    wdl_doc,
+    wdl_exe,
+    tags=None,
+    *,
+    definition_zip=None,
 ):
     """
     Create a new Omics workflow for this WDL
     """
 
-    # zip up the source code
-    wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
-
-    # formulate the Omics parameter template based on the WDL inputs
+    wdl_zip = (
+        definition_zip
+        if definition_zip is not None
+        else zip_wdl(logger, cleanup, wdl_doc)
+    )
     parameter_template = parameter_template_from_wdl(wdl_exe)
 
     # create workflow

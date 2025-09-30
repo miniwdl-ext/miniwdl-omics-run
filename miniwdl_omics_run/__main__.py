@@ -279,7 +279,7 @@ def arg_parser():
         action="store_true",
         help=(
             "Use legacy workflow naming (no workflow versioning; each version is a "
-            "separate Omics workflow with version digest in the name)."
+            "separate Omics workflow named with content digest suffix)."
         ),
     )
 
@@ -359,11 +359,7 @@ def ensure_omics_workflow_legacy(logger, cleanup, omics, wdl_doc, wdl_exe):
         )
 
     # Wait for workflow to finish creating
-    await_omics_entity(
-        logger,
-        lambda: omics.get_workflow(export=[], id=workflow_id, type="PRIVATE"),
-        f"Omics workflow {workflow_id}",
-    )
+    await_omics_workflow(logger, omics, workflow_id)
     return workflow_id
 
 
@@ -403,11 +399,7 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
         )
 
     # Ensure base workflow is ready before creating/using versions
-    await_omics_entity(
-        logger,
-        lambda: omics.get_workflow(export=[], id=workflow_id, type="PRIVATE"),
-        f"Omics workflow {workflow_id}",
-    )
+    await_omics_workflow(logger, omics, workflow_id)
 
     # Ensure version
     version_name = wdl_exe.digest[:16]
@@ -435,7 +427,6 @@ def ensure_omics_workflow_and_version(logger, cleanup, omics, wdl_doc, wdl_exe):
     if not existing_version:
         if wdl_zip is None:
             wdl_zip = zip_wdl(logger, cleanup, wdl_doc)
-        # Recompute parameter template
         parameter_template = parameter_template_from_wdl(wdl_exe)
         omics.create_workflow_version(
             workflowId=workflow_id,
@@ -602,7 +593,6 @@ def await_omics_entity(
 
 
 def await_omics_workflow(logger, omics, workflow_id):
-    """Compatibility wrapper to await a workflow finishing CREATING."""
     return await_omics_entity(
         logger,
         lambda: omics.get_workflow(export=[], id=workflow_id, type="PRIVATE"),

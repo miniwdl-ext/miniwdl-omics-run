@@ -126,6 +126,7 @@ def main(argv=sys.argv):
             requestId=str(uuid.uuid4()),
             **start_run_options(args),
         )
+
         if workflow_version_name:
             start_kwargs["workflowVersionName"] = workflow_version_name
         res = omics.start_run(**start_kwargs)
@@ -226,6 +227,15 @@ def arg_parser():
     )
     group.add_argument("--name", type=str, help="Run name", default=None)
     group.add_argument("--priority", type=int, help="Priority (integer)", default=None)
+    group.add_argument(
+        "--scratch-storage-mode",
+        dest="scratchStorageMode",
+        type=str.upper,
+        help="Ephemeral storage mode",
+        default=None,
+        choices=["LOCAL", "SHARED"],
+    )
+
     run_group = group.add_mutually_exclusive_group(required=False)
     run_group.add_argument(
         "--run-group",
@@ -296,6 +306,7 @@ def start_run_options(args):
         ("cache_id", "cacheId", None),
         ("cache_behavior", "cacheBehavior", lambda v: _CACHE_BEHAVIOR_MAP[v]),
         ("retention_mode", "retentionMode", lambda v: v.upper()),
+        ("scratchStorageMode", "scratchStorageMode", None),
     ]
     ans = {}
     for attr, key, transform in mappings:

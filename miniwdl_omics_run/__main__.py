@@ -230,7 +230,7 @@ def arg_parser():
     group.add_argument(
         "--scratch-storage-mode",
         dest="scratchStorageMode",
-        type=str,
+        type=str.upper,
         help="Ephemeral storage mode",
         default=None,
         choices=["LOCAL", "SHARED"],

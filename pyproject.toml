@@ -10,9 +10,9 @@ dynamic = ["version"]
 readme = "./README.md"
 dependencies = [
   "miniwdl>=1.9.1,<2",
-  "boto3>=1.39",
+  "boto3>=1.43.35",
 ]
-requires-python = "~=3.8"
+requires-python = "~=3.10"
 urls = { repository = "https://github.com/miniwdl-ext/miniwdl-omics-run.git" }
 classifiers = ["License :: OSI Approved :: MIT License"]
 

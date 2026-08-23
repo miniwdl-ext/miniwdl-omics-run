@@ -73,9 +73,11 @@ def main(argv=sys.argv):
                 or args.empty
                 or args.none
                 or args.output_uri
+                or args.vpc_config is not None
             ):
                 logger.error(
-                    "workflow input/output arguments are not applicable with --build"
+                    "workflow input/output arguments and --vpc-config are not "
+                    "applicable with --build"
                 )
                 sys.exit(1)
             wdl_exe = wdl_doc.workflow or wdl_doc.tasks[0]
@@ -235,6 +237,14 @@ def arg_parser():
         default=None,
         choices=["LOCAL", "SHARED"],
     )
+    group.add_argument(
+        "--vpc-config",
+        dest="vpc_config",
+        metavar="NAME",
+        type=str,
+        help="Name of an active HealthOmics VPC configuration (implies VPC networking)",
+        default=None,
+    )
 
     run_group = group.add_mutually_exclusive_group(required=False)
     run_group.add_argument(
@@ -313,6 +323,9 @@ def start_run_options(args):
         val = getattr(args, attr)
         if val is not None:
             ans[key] = transform(val) if transform else val
+    if args.vpc_config is not None:
+        ans["networkingMode"] = "VPC"
+        ans["configurationName"] = args.vpc_config
     return ans
 
 

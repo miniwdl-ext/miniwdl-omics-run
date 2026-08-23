@@ -110,5 +110,21 @@ The command-line interface accepts WDL inputs using the `input_key=value` syntax
 - To quickly list a workflow's inputs, try `miniwdl run workflow.wdl ?`
 - To use [call caching](https://docs.aws.amazon.com/omics/latest/dev/workflows-call-caching.html), create a run cache using the console or CLI and pass `--cache {NAME}` or `--cache-id {ID}` to `miniwdl-omics-run`.
 - To use [dynamic run storage](https://docs.aws.amazon.com/omics/latest/dev/workflows-run-types.html), pass `--storage-type dynamic`.
+- To use [VPC networking](https://docs.aws.amazon.com/omics/latest/dev/workflows-vpc-networking.html), create an `ACTIVE` HealthOmics VPC configuration in the workflow's region, then pass its name with `--vpc-config {NAME}`. For example:
+
+  ```
+  aws omics create-configuration \
+      --name my-vpc-config \
+      --run-configurations '{"vpcConfig":{"securityGroupIds":["sg-0123456789abcdef0"],"subnetIds":["subnet-0123456789abcdef0"]}}' \
+      --region "$AWS_DEFAULT_REGION"
+
+  miniwdl-omics-run TestFlow.wdl \
+      --vpc-config my-vpc-config \
+      --role poweromics --output-uri s3://{BUCKET_NAME}/{PREFIX} \
+      input_txt_file=s3://{BUCKET_NAME}/test/test.txt \
+      docker={ECR_ENDPT}/omics:ubuntu-22.04
+  ```
+
+  The configuration may take up to 15 minutes to become `ACTIVE`. `--vpc-config` implies VPC networking; without it, HealthOmics uses its default restricted networking. For internet access from VPC-connected runs, use private subnets routed through a NAT gateway; a public subnet alone does not provide internet access. See the [VPC internet access guidance](https://docs.aws.amazon.com/omics/latest/dev/workflows-vpc-internet.html).
 - Omics has certain limits on the number of runs and versions per workflow; if you hit those, then you'll need to use the Console/CLI/API to clear them out.
 - Before Omics had workflow versioning, this tool created a separate Omics workflow for any change to the WDL, each named with a content digest suffix. That behavior can be restored with `--legacy-workflow-name`.

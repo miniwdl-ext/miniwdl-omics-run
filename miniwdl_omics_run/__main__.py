@@ -73,11 +73,12 @@ def main(argv=sys.argv):
                 or args.empty
                 or args.none
                 or args.output_uri
+                or args.tags is not None
                 or args.vpc_config is not None
             ):
                 logger.error(
-                    "workflow input/output arguments and --vpc-config are not "
-                    "applicable with --build"
+                    "workflow input/output arguments, --tag, and --vpc-config are "
+                    "not applicable with --build"
                 )
                 sys.exit(1)
             wdl_exe = wdl_doc.workflow or wdl_doc.tasks[0]
@@ -245,6 +246,14 @@ def arg_parser():
         help="Name of an active HealthOmics VPC configuration (implies VPC networking)",
         default=None,
     )
+    group.add_argument(
+        "--tag",
+        dest="tags",
+        action=TagAction,
+        metavar="KEY=VALUE",
+        help="Tag for the run; repeatable",
+        default=None,
+    )
 
     run_group = group.add_mutually_exclusive_group(required=False)
     run_group.add_argument(
@@ -317,6 +326,7 @@ def start_run_options(args):
         ("cache_behavior", "cacheBehavior", lambda v: _CACHE_BEHAVIOR_MAP[v]),
         ("retention_mode", "retentionMode", lambda v: v.upper()),
         ("scratchStorageMode", "scratchStorageMode", None),
+        ("tags", "tags", None),
     ]
     ans = {}
     for attr, key, transform in mappings:
@@ -327,6 +337,25 @@ def start_run_options(args):
         ans["networkingMode"] = "VPC"
         ans["configurationName"] = args.vpc_config
     return ans
+
+
+class TagAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        key, separator, value = values.partition("=")
+        if not separator or not key:
+            parser.error(f"{option_string} must be in KEY=VALUE format")
+        if len(key) > 128:
+            parser.error(f"{option_string} tag key must be at most 128 characters")
+        if len(value) > 256:
+            parser.error(f"{option_string} tag value must be at most 256 characters")
+
+        tags = getattr(namespace, self.dest, None)
+        if tags is None:
+            tags = {}
+        if key in tags:
+            parser.error(f"duplicate {option_string} tag key: {key}")
+        tags[key] = value
+        setattr(namespace, self.dest, tags)
 
 
 class VersionAction(argparse.Action):
